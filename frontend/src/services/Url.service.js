@@ -1,12 +1,26 @@
 import axios from 'axios';
 
-const apiUrl = `${process.env.REACT_APP_API_URL || 'https://whatsapp-clonebackend.onrender.com'}/api`;
+const apiUrl =
+  `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api`;
 
-const axiosInstance = axios.create({
+const api = axios.create({
   baseURL: apiUrl,
   withCredentials: true,
-  // Render Free can take about a minute to wake after being idle.
   timeout: 75000,
 });
 
-export default axiosInstance;
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('auth_token');
+
+    if (token) {
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+export default api;

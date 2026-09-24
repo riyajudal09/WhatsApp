@@ -74,6 +74,15 @@ const unwrapError = (error, fallback) => {
   );
 };
 
+const { data } = await api.post('/auth/login', payload);
+
+const token = data?.data?.token;
+
+if (token) {
+  localStorage.setItem('auth_token', token);
+}
+
+return data;
 
 // =========================
 // LOGIN WITH PASSWORD
@@ -87,19 +96,11 @@ export async function loginWithPassword(
 ) {
   try {
     const payload = email
-      ? {
-          email,
-          password,
-        }
-      : {
-          phoneNumber,
-          phoneSuffix,
-          password,
-        };
+      ? { email, password }
+      : { phoneNumber, phoneSuffix, password };
 
     const { data } = await api.post('/auth/login', payload);
 
-    // Save JWT token after successful login
     const token = data?.data?.token;
 
     if (token) {
@@ -111,7 +112,6 @@ export async function loginWithPassword(
     return unwrapError(error, 'Unable to sign in');
   }
 }
-
 
 // =========================
 // CREATE ACCOUNT
