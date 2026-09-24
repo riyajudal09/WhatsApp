@@ -5,7 +5,7 @@ function getAllowedOrigins() {
     .filter(Boolean);
 
   if (process.env.NODE_ENV !== 'production') {
-    configured.push('http://localhost:3000');
+    configured.push('https://whatsapp-clonefrontend.onrender.com');
   }
 
   return [...new Set(configured)];
