@@ -466,7 +466,7 @@ exports.updateProfile =
         res,
         500,
         error.message ||
-          'Unable to update profile'
+        'Unable to update profile'
       );
     }
   };
@@ -625,7 +625,7 @@ exports.logout =
       {
         sameSite:
           process.env.NODE_ENV ===
-          'production'
+            'production'
             ? 'none'
             : 'lax',
 
@@ -742,16 +742,16 @@ exports.getAllUser =
           const at =
             a.conversation?.updatedAt
               ? new Date(
-                  a.conversation.updatedAt
-                ).getTime()
+                a.conversation.updatedAt
+              ).getTime()
               : 0;
 
 
           const bt =
             b.conversation?.updatedAt
               ? new Date(
-                  b.conversation.updatedAt
-                ).getTime()
+                b.conversation.updatedAt
+              ).getTime()
               : 0;
 
 
@@ -782,3 +782,203 @@ exports.getAllUser =
       );
     }
   };
+
+// ========================================
+// HIDE / REMOVE USER FROM CHAT LIST
+// ========================================
+
+exports.hideUser = async (req, res) => {
+  try {
+    const loggedInUserId = req.user.userId;
+    const userToHideId = req.params.userId;
+
+    if (!userToHideId) {
+      return response(
+        res,
+        400,
+        'User ID is required'
+      );
+    }
+
+    if (
+      String(loggedInUserId) ===
+      String(userToHideId)
+    ) {
+      return response(
+        res,
+        400,
+        'You cannot remove yourself'
+      );
+    }
+
+    const targetUser =
+      await User.findById(userToHideId);
+
+    if (!targetUser) {
+      return response(
+        res,
+        404,
+        'User not found'
+      );
+    }
+
+    await User.findByIdAndUpdate(
+      loggedInUserId,
+      {
+        $addToSet: {
+          hiddenUsers: userToHideId,
+        },
+      }
+    );
+
+    return response(
+      res,
+      200,
+      'User removed from chat list'
+    );
+
+  } catch (error) {
+    console.error(
+      'hideUser:',
+      error
+    );
+
+    return response(
+      res,
+      500,
+      'Unable to remove user'
+    );
+  }
+};
+
+
+// ========================================
+// GET ALL USERS
+// ========================================
+
+exports.getAllUser = async (req, res) => {
+  try {
+    const loggedInUser =
+      req.user.userId;
+
+    // Get current user's hidden users list
+    const currentUser =
+      await User.findById(loggedInUser)
+        .select('hiddenUsers')
+        .lean();
+
+    const hiddenUsers =
+      currentUser?.hiddenUsers || [];
+
+    // Do not show:
+    // 1. logged-in user
+    // 2. users manually removed/hidden
+    const users =
+      await User.find({
+        _id: {
+          $ne: loggedInUser,
+          $nin: hiddenUsers,
+        },
+
+        isverified: true,
+      })
+        .select(
+          'username profilepicture about phoneNumber phoneSuffix fullPhoneNumber lastSeen isOnline'
+        )
+        .lean();
+
+    const result =
+      await Promise.all(
+        users.map(
+          async (user) => {
+
+            const conversation =
+              await Conversation.findOne({
+                participants: {
+                  $all: [
+                    loggedInUser,
+                    user._id,
+                  ],
+                  $size: 2,
+                },
+              })
+                .populate({
+                  path: 'lastMessage',
+                  select:
+                    'content contentType mediaUrl createdAt sender receiver messageStatus',
+                })
+                .lean();
+
+            let unreadCount = 0;
+
+            if (conversation) {
+              unreadCount =
+                await Message.countDocuments({
+                  conversation:
+                    conversation._id,
+
+                  receiver:
+                    loggedInUser,
+
+                  messageStatus: {
+                    $ne: 'read',
+                  },
+
+                  deletedForEveryone:
+                    false,
+                });
+            }
+
+            return {
+              ...user,
+
+              conversation:
+                conversation || null,
+
+              unreadCount,
+            };
+          }
+        )
+      );
+
+    result.sort(
+      (a, b) => {
+
+        const at =
+          a.conversation?.updatedAt
+            ? new Date(
+              a.conversation.updatedAt
+            ).getTime()
+            : 0;
+
+        const bt =
+          b.conversation?.updatedAt
+            ? new Date(
+              b.conversation.updatedAt
+            ).getTime()
+            : 0;
+
+        return bt - at;
+      }
+    );
+
+    return response(
+      res,
+      200,
+      'Users retrieved',
+      result
+    );
+
+  } catch (error) {
+    console.error(
+      'getAllUser:',
+      error
+    );
+
+    return response(
+      res,
+      500,
+      'Unable to retrieve users'
+    );
+  }
+};
