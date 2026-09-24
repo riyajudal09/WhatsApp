@@ -7,7 +7,7 @@ const onlineUsers = new Map();
 module.exports = function initializeSocket(server) {
   const io = new Server(server, {
     cors: {
-      origin: getAllowedOrigins(),
+      origin:process.env.FRONTEND_URL || 'https://whatsapp-clonefrontend.onrender.com',
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE'],
     },
@@ -18,17 +18,31 @@ module.exports = function initializeSocket(server) {
 
     socket.on('user_connected', async (userId) => {
       if (!userId) return;
+
       currentUserId = String(userId);
+
       onlineUsers.set(currentUserId, socket.id);
       socket.join(currentUserId);
+
       try {
-        await User.findByIdAndUpdate(currentUserId, { isOnline: true, lastSeen: new Date() });
-      } catch (_) {}
-      io.emit('user_status', { userId: currentUserId, isOnline: true, lastSeen: new Date() });
+        await User.findByIdAndUpdate(currentUserId, {
+          isOnline: true,
+          lastSeen: new Date(),
+        });
+      } catch (error) {
+        console.error('Online status update error:', error.message);
+      }
+
+      io.emit('user_status', {
+        userId: currentUserId,
+        isOnline: true,
+        lastSeen: new Date(),
+      });
     });
 
     socket.on('typing_start', ({ receiverId, conversationId }) => {
       if (!receiverId || !currentUserId) return;
+
       io.to(String(receiverId)).emit('user_typing', {
         userId: currentUserId,
         conversationId,
@@ -38,6 +52,7 @@ module.exports = function initializeSocket(server) {
 
     socket.on('typing_stop', ({ receiverId, conversationId }) => {
       if (!receiverId || !currentUserId) return;
+
       io.to(String(receiverId)).emit('user_typing', {
         userId: currentUserId,
         conversationId,
@@ -47,15 +62,31 @@ module.exports = function initializeSocket(server) {
 
     socket.on('disconnect', async () => {
       if (!currentUserId) return;
-      if (onlineUsers.get(currentUserId) === socket.id) onlineUsers.delete(currentUserId);
+
+      if (onlineUsers.get(currentUserId) === socket.id) {
+        onlineUsers.delete(currentUserId);
+      }
+
       const lastSeen = new Date();
+
       try {
-        await User.findByIdAndUpdate(currentUserId, { isOnline: false, lastSeen });
-      } catch (_) {}
-      io.emit('user_status', { userId: currentUserId, isOnline: false, lastSeen });
+        await User.findByIdAndUpdate(currentUserId, {
+          isOnline: false,
+          lastSeen,
+        });
+      } catch (error) {
+        console.error('Offline status update error:', error.message);
+      }
+
+      io.emit('user_status', {
+        userId: currentUserId,
+        isOnline: false,
+        lastSeen,
+      });
     });
   });
 
   io.socketUserMap = onlineUsers;
+
   return io;
 };
