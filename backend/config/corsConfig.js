@@ -1,5 +1,5 @@
 function getAllowedOrigins() {
-  const configured = String(process.env.FRONTEND_URL || '')
+  const configured = String(process.env.FRONTEND_URL || 'https://whatsapp-clonefrontend.onrender.com')
     .split(',')
     .map((value) => value.trim().replace(/\/$/, ''))
     .filter(Boolean);
